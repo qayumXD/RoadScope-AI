@@ -1,0 +1,19 @@
+# Computer Vision & Deep Learning
+ultralytics==8.1.0        # YOLOv8 implementation
+opencv-python-headless>=4.9.0  # Computer vision (headless for server environments)
+torch>=2.0.0              # PyTorch (Core DL framework)
+torchvision>=0.15.0       # Image transformations
+
+# Data Handling & Math
+pandas>=2.1.0             # DataFrame manipulation
+numpy>=1.24.0             # Numerical operations
+
+# Geospatial Processing
+gpxpy>=1.6.0              # Parsing GPX files
+geopy>=2.4.0              # Geocoding and distance calculations
+
+# Visualization & Dashboard
+streamlit>=1.30.0         # Web dashboard framework
+folium>=0.15.0            # Interactive maps
+streamlit-folium>=0.17.0  # Streamlit integration for Folium
+matplotlib>=3.8.0         # Plotting library

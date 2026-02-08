@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.env
+.DS_Store
+data/raw_videos/
+data/dataset/
+runs/
+models/*.pt
+models/*.onnx
+venv/
+.idea/
+.vscode/
