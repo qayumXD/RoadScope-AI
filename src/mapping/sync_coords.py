@@ -53,8 +53,8 @@ def sync_timestamps(detections_csv, gpx_csv, video_start_time_str, output_csv):
         min_idx = time_diff.idxmin()
         nearest_point = gps_data_sorted.loc[min_idx]
         
-        # Threshold: if difference is too large (e.g. > 5 seconds), GPS might be missing
-        if time_diff[min_idx].total_seconds() > 5.0:
+        # Threshold: if difference is too large (e.g. > 60 seconds), GPS might be missing
+        if time_diff[min_idx].total_seconds() > 60.0:
             return None, None
             
         return nearest_point['latitude'], nearest_point['longitude']

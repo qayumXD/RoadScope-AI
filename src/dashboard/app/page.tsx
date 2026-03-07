@@ -1,25 +1,43 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Papa from 'papaparse';
-import { UploadCloud, Map as MapIcon, Loader2 } from 'lucide-react';
+import { UploadCloud, Map as MapIcon, Loader2, Database } from 'lucide-react';
 import PotholeMap from '../components/Map';
 import PotholeStats from '../components/Stats';
 import { Pothole } from '../types';
 
 export default function Home() {
   const [potholes, setPotholes] = useState<Pothole[]>([]);
+  const [filterSeverity, setFilterSeverity] = useState<'All' | 'Small' | 'Medium' | 'Large'>('All');
   const [isLoading, setIsLoading] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  // Filtered data for display
+  const filteredPotholes = potholes.filter(p => 
+    filterSeverity === 'All' ? true : p.severity === filterSeverity
+  );
 
-    setFileName(file.name);
+  // Auto-load default data if present in public folder
+  useEffect(() => {
+    const loadDefaultData = async () => {
+      try {
+        const response = await fetch('/potholes.csv');
+        if (response.ok) {
+          const text = await response.text();
+          setFileName('potholes.csv (Auto-loaded)');
+          parseCSV(text);
+        }
+      } catch (err) {
+        console.log('No default potholes.csv found in public folder.');
+      }
+    };
+    loadDefaultData();
+  }, []);
+
+  const parseCSV = (csvText: string) => {
     setIsLoading(true);
-
-    Papa.parse(file, {
+    Papa.parse(csvText, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
@@ -29,9 +47,9 @@ export default function Home() {
           longitude: parseFloat(row.longitude),
           severity: row.severity as 'Small' | 'Medium' | 'Large',
           confidence: parseFloat(row.confidence),
-          timestamp: row.time || new Date().toISOString(),
+          timestamp: row.time || row.timestamp_ms || new Date().toISOString(),
           frame_id: parseInt(row.frame_id),
-        })).filter(p => !isNaN(p.latitude) && !isNaN(p.longitude)); // Filter invalid rows
+        })).filter(p => !isNaN(p.latitude) && !isNaN(p.longitude));
 
         setPotholes(parsedData);
         setIsLoading(false);
@@ -41,6 +59,20 @@ export default function Home() {
         setIsLoading(false);
       }
     });
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        parseCSV(e.target.result as string);
+      }
+    };
+    reader.readAsText(file);
   };
 
   return (
@@ -80,13 +112,32 @@ export default function Home() {
             </p>
           </div>
 
-          <PotholeStats potholes={potholes} className="grid-cols-2 gap-3 mb-6" />
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Severity Filter</h3>
+            <div className="flex gap-2">
+              {(['All', 'Small', 'Medium', 'Large'] as const).map((sev) => (
+                <button
+                  key={sev}
+                  onClick={() => setFilterSeverity(sev)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                    filterSeverity === sev
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  {sev}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          {potholes.length > 0 && (
+          <PotholeStats potholes={filteredPotholes} className="grid-cols-2 gap-3 mb-6" />
+
+          {filteredPotholes.length > 0 && (
             <div className="mt-6">
               <h3 className="text-sm font-medium text-gray-900 mb-3">Recent Detections</h3>
               <div className="space-y-3">
-                {potholes.slice(0, 10).map((p) => (
+                {filteredPotholes.slice(0, 10).map((p) => (
                   <div key={p.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer border border-gray-100">
                     <div className={`w-2 h-2 mt-1.5 rounded-full flex-shrink-0 ${p.severity === 'Large' ? 'bg-red-500' :
                         p.severity === 'Medium' ? 'bg-orange-500' : 'bg-yellow-500'
@@ -109,17 +160,19 @@ export default function Home() {
 
         {/* Map Area */}
         <div className="flex-1 relative bg-gray-200">
-          <PotholeMap potholes={potholes} className="h-full w-full rounded-none" />
+          <PotholeMap potholes={filteredPotholes} className="h-full w-full rounded-none" />
 
-          {potholes.length === 0 && !isLoading && (
+          {filteredPotholes.length === 0 && !isLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 backdrop-blur-sm z-0 pointer-events-none">
               <div className="text-center p-8">
                 <div className="bg-white p-4 rounded-full inline-block shadow-md mb-4">
-                  <UploadCloud size={48} className="text-blue-500" />
+                  <Database size={48} className="text-blue-500" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900">No Data Loaded</h3>
+                <h3 className="text-xl font-semibold text-gray-900">No {filterSeverity !== 'All' ? filterSeverity : ''} Data Found</h3>
                 <p className="text-gray-500 mt-2 max-w-sm mx-auto">
-                  Upload a processed CSV file to see the detections on the map.
+                  {potholes.length === 0 
+                    ? "Upload a processed CSV file to see detections on the map."
+                    : `There are no ${filterSeverity} potholes detected in this dataset.`}
                 </p>
               </div>
             </div>

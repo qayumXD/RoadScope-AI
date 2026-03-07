@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .env
+.env.local
 .DS_Store
 data/raw_videos/
 data/dataset/
@@ -10,3 +11,24 @@ models/*.onnx
 venv/
 .idea/
 .vscode/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Dashboard specific
+src/dashboard/.env.local
+src/dashboard/.next/
+src/dashboard/node_modules/
+src/dashboard/public/potholes.csv
+
+# Data
+data/mock/
+data/processed/
