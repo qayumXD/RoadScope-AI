@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, AdvancedMarker, Marker, Pin, InfoWindow } from '@vis.gl/react-google-maps';
 import { Pothole } from '../types';
 
 interface MapComponentProps {
@@ -12,6 +12,7 @@ interface MapComponentProps {
 export default function PotholeMap({ potholes, className }: MapComponentProps) {
     const [selectedPothole, setSelectedPothole] = useState<Pothole | null>(null);
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || '';
+    const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID || '';
 
     // Default center (can be dynamic based on potholes)
     const defaultCenter = { lat: 0, lng: 0 };
@@ -40,25 +41,33 @@ export default function PotholeMap({ potholes, className }: MapComponentProps) {
                     defaultCenter={defaultCenter}
                     center={center}
                     defaultZoom={15}
-                    mapId="DEMO_MAP_ID" // Replace with actual Map ID for advanced markers
+                    mapId={mapId || undefined}
                     gestureHandling={'greedy'}
                     disableDefaultUI={false}
                 >
                     {potholes.map((pothole) => (
-                        <AdvancedMarker
-                            key={pothole.id}
-                            position={{ lat: pothole.latitude, lng: pothole.longitude }}
-                            onClick={() => setSelectedPothole(pothole)}
-                        >
-                            <Pin
-                                background={
-                                    pothole.severity === 'Large' ? '#EF4444' :
-                                        pothole.severity === 'Medium' ? '#F59E0B' : '#EAB308'
-                                }
-                                borderColor={'#1F2937'}
-                                glyphColor={'#FFF'}
+                        mapId ? (
+                            <AdvancedMarker
+                                key={pothole.id}
+                                position={{ lat: pothole.latitude, lng: pothole.longitude }}
+                                onClick={() => setSelectedPothole(pothole)}
+                            >
+                                <Pin
+                                    background={
+                                        pothole.severity === 'Large' ? '#EF4444' :
+                                            pothole.severity === 'Medium' ? '#F59E0B' : '#EAB308'
+                                    }
+                                    borderColor={'#1F2937'}
+                                    glyphColor={'#FFF'}
+                                />
+                            </AdvancedMarker>
+                        ) : (
+                            <Marker
+                                key={pothole.id}
+                                position={{ lat: pothole.latitude, lng: pothole.longitude }}
+                                onClick={() => setSelectedPothole(pothole)}
                             />
-                        </AdvancedMarker>
+                        )
                     ))}
 
                     {selectedPothole && (

@@ -7,6 +7,40 @@ import PotholeMap from '../components/Map';
 import PotholeStats from '../components/Stats';
 import { Pothole } from '../types';
 
+type CsvRow = {
+  pothole_id?: string | number;
+  latitude?: string | number;
+  longitude?: string | number;
+  severity?: string;
+  confidence?: string | number;
+  time?: string;
+  detection_time?: string;
+  timestamp_ms?: string | number;
+  frame_id?: string | number;
+};
+
+const normalizeSeverity = (value: string | undefined): Pothole['severity'] => {
+  const normalized = (value || '').trim().toLowerCase();
+  if (normalized === 'large') return 'Large';
+  if (normalized === 'medium') return 'Medium';
+  return 'Small';
+};
+
+const parseConfidence = (value: string | number | undefined): number => {
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) return 0;
+  if (parsed > 1) return Math.min(parsed / 100, 1);
+  return Math.max(parsed, 0);
+};
+
+const formatTime = (value: string): string => {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'Unknown time';
+  }
+  return parsed.toLocaleTimeString();
+};
+
 export default function Home() {
   const [potholes, setPotholes] = useState<Pothole[]>([]);
   const [filterSeverity, setFilterSeverity] = useState<'All' | 'Small' | 'Medium' | 'Large'>('All');
@@ -41,15 +75,23 @@ export default function Home() {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        const parsedData: Pothole[] = results.data.map((row: any) => ({
-          id: row.pothole_id || Math.random().toString(36).substr(2, 9),
-          latitude: parseFloat(row.latitude),
-          longitude: parseFloat(row.longitude),
-          severity: row.severity as 'Small' | 'Medium' | 'Large',
-          confidence: parseFloat(row.confidence),
-          timestamp: row.time || row.timestamp_ms || new Date().toISOString(),
-          frame_id: parseInt(row.frame_id),
-        })).filter(p => !isNaN(p.latitude) && !isNaN(p.longitude));
+        const parsedData: Pothole[] = (results.data as CsvRow[])
+          .map((row, index) => {
+            const latitude = Number(row.latitude);
+            const longitude = Number(row.longitude);
+            const timestamp = (row.detection_time || row.time || '').toString().trim() || new Date().toISOString();
+            const frameId = Number(row.frame_id);
+            return {
+              id: String(row.pothole_id ?? `${index}-${Number.isNaN(frameId) ? 'na' : frameId}`),
+              latitude,
+              longitude,
+              severity: normalizeSeverity(row.severity),
+              confidence: parseConfidence(row.confidence),
+              timestamp,
+              frame_id: Number.isNaN(frameId) ? undefined : frameId,
+            };
+          })
+          .filter((p) => !Number.isNaN(p.latitude) && !Number.isNaN(p.longitude));
 
         setPotholes(parsedData);
         setIsLoading(false);
@@ -144,10 +186,10 @@ export default function Home() {
                       }`} />
                     <div>
                       <p className="text-sm font-medium text-gray-900">Pothole #{p.id}</p>
-                      <p className="text-xs text-gray-500">{new Date(p.timestamp).toLocaleTimeString()}</p>
+                      <p className="text-xs text-gray-500">{formatTime(p.timestamp)}</p>
                       <div className="flex gap-2 mt-1">
                         <span className="text-[10px] font-mono bg-white px-1.5 py-0.5 rounded border border-gray-200 text-gray-600">
-                          Conf: {Math.round(p.confidence * 100)}%
+                          Conf: {Math.round(Math.max(0, Math.min(1, p.confidence)) * 100)}%
                         </span>
                       </div>
                     </div>
