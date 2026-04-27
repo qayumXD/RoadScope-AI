@@ -40,6 +40,7 @@ pip install -r requirements.txt
 
 - Baseline model for quick smoke tests: `yolov8n.pt` (Ultralytics auto-downloads it).
 - Project model for real pothole detection: train and use `models/pothole_yolov8n.pt`.
+- Full guide for dataset sourcing and no-GPU training workflows: `docs/DATA_AND_TRAINING_GUIDE.md`.
 
 Train a project model:
 
