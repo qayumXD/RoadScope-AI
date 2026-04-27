@@ -103,6 +103,21 @@ Before training, verify:
 
 ## 5) Local CPU Smoke Training (Do this first)
 
+Before training, run the dataset validator:
+
+```bash
+python3 src/utils/validate_dataset.py --data data/data.yaml
+```
+
+Strict mode (recommended before long cloud training):
+
+```bash
+python3 src/utils/validate_dataset.py --data data/data.yaml --strict
+```
+
+`src/detection/train.py` runs this validation preflight by default.
+Use `--skip_validate` only for debugging quick experiments.
+
 Run a short validation training to catch bad labels/config quickly:
 
 ```bash

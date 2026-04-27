@@ -52,6 +52,20 @@ python3 src/detection/train.py \
   --output_model models/pothole_yolov8n.pt
 ```
 
+Validate dataset integrity before training (recommended):
+
+```bash
+python3 src/utils/validate_dataset.py --data data/data.yaml
+```
+
+Use strict mode when you want missing labels and orphan labels to fail validation:
+
+```bash
+python3 src/utils/validate_dataset.py --data data/data.yaml --strict
+```
+
+Note: `src/detection/train.py` runs dataset validation preflight by default.
+
 This saves:
 - `models/pothole_yolov8n.pt`
 - `models/pothole_yolov8n.onnx`

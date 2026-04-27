@@ -1,7 +1,8 @@
 from ultralytics import YOLO
 import argparse
-import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 def train_yolo(
@@ -12,7 +13,9 @@ def train_yolo(
     model_variant='yolov8n.pt',
     output_model='models/pothole_yolov8n.pt',
     project='runs/train',
-    run_name='pothole_model'
+    run_name='pothole_model',
+    validate_dataset=True,
+    strict_validate=False,
 ):
     """
     Trains a YOLOv8 model on a custom dataset.
@@ -26,6 +29,8 @@ def train_yolo(
         output_model (str): Path where the trained .pt model will be copied.
         project (str): Directory where Ultralytics training artifacts are stored.
         run_name (str): Ultralytics run name.
+        validate_dataset (bool): Whether to run dataset validation before training.
+        strict_validate (bool): Whether to treat missing labels/orphan labels as fatal.
     """
     repo_root = Path(__file__).resolve().parents[2]
 
@@ -43,6 +48,18 @@ def train_yolo(
 
     if not data_yaml_path.exists():
         raise FileNotFoundError(f"data.yaml not found at: {data_yaml_path}")
+
+    if validate_dataset:
+        validator_script = repo_root / 'src' / 'utils' / 'validate_dataset.py'
+        validator_cmd = [sys.executable, str(validator_script), '--data', str(data_yaml_path)]
+        if strict_validate:
+            validator_cmd.append('--strict')
+
+        print("Running dataset validation preflight...")
+        try:
+            subprocess.run(validator_cmd, check=True, cwd=repo_root)
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError("Dataset validation failed. Fix dataset issues before training.") from exc
 
     print(f"Starting training with model: {model_variant}")
     # Load a model
@@ -93,6 +110,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_model", type=str, default="models/pothole_yolov8n.pt", help="Path to save trained .pt model")
     parser.add_argument("--project", type=str, default="runs/train", help="Directory for Ultralytics training artifacts")
     parser.add_argument("--name", type=str, default="pothole_model", help="Training run name")
+    parser.add_argument("--skip_validate", action="store_true", help="Skip dataset validation preflight")
+    parser.add_argument("--strict_validate", action="store_true", help="Fail if missing/orphan labels are detected")
 
     args = parser.parse_args()
 
@@ -105,4 +124,6 @@ if __name__ == "__main__":
         args.output_model,
         args.project,
         args.name,
+        not args.skip_validate,
+        args.strict_validate,
     )

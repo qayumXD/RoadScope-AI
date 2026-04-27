@@ -7,6 +7,7 @@ torchvision>=0.15.0       # Image transformations
 # Data Handling & Math
 pandas>=2.1.0             # DataFrame manipulation
 numpy>=1.24.0             # Numerical operations
+PyYAML>=6.0.1             # YAML parsing for dataset config validation
 
 # Geospatial Processing
 gpxpy>=1.6.0              # Parsing GPX files
