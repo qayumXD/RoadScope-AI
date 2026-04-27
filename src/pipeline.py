@@ -26,7 +26,7 @@ def main():
     parser.add_argument("--start_time", type=str, required=True, help="Video start time UTC (ISO 8601, e.g. 2023-10-27T14:30:00)")
     
     # Optional Arguments
-    parser.add_argument("--model", type=str, default="models/yolov8n.pt", help="Path to YOLOv8 weights")
+    parser.add_argument("--model", type=str, default="yolov8n.pt", help="YOLOv8 weights alias (e.g. yolov8n.pt) or path to local weights")
     parser.add_argument("--output_dir", type=str, default="data/processed", help="Directory for output files")
     parser.add_argument("--snap_key", type=str, help="Google Maps API Key (optional for snapping to roads)")
 
@@ -39,9 +39,24 @@ def main():
             return path_value
         return os.path.join(repo_root, path_value)
 
+    def resolve_model_path(model_value):
+        if os.path.isabs(model_value):
+            return model_value
+
+        has_path_separator = os.path.sep in model_value
+        if os.path.altsep:
+            has_path_separator = has_path_separator or (os.path.altsep in model_value)
+
+        # A plain alias like "yolov8n.pt" should pass through so Ultralytics
+        # can auto-download it if missing locally.
+        if not has_path_separator:
+            return model_value
+
+        return os.path.join(repo_root, model_value)
+
     video_path = resolve_path(args.video)
     gpx_path = resolve_path(args.gpx)
-    model_path = resolve_path(args.model)
+    model_path = resolve_model_path(args.model)
     output_dir = resolve_path(args.output_dir)
 
     # Create output directory

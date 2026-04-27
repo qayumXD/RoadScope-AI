@@ -36,6 +36,27 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### Detection Model Options
+
+- Baseline model for quick smoke tests: `yolov8n.pt` (Ultralytics auto-downloads it).
+- Project model for real pothole detection: train and use `models/pothole_yolov8n.pt`.
+
+Train a project model:
+
+```bash
+python3 src/detection/train.py \
+  --data data/data.yaml \
+  --model yolov8n.pt \
+  --epochs 50 \
+  --output_model models/pothole_yolov8n.pt
+```
+
+This saves:
+- `models/pothole_yolov8n.pt`
+- `models/pothole_yolov8n.onnx`
+
+Important: this repository currently does not include a labeled dataset in `data/dataset`, so add your train/val images and labels before training.
+
 ### 2) Run End-to-End Pipeline
 
 ```bash
@@ -43,7 +64,7 @@ python3 src/pipeline.py \
   --video data/raw_videos/road_trip.mp4 \
   --gpx data/gps_logs/road_trip.gpx \
   --start_time 2026-04-27T10:00:00Z \
-  --model models/yolov8n.pt \
+  --model models/pothole_yolov8n.pt \
   --output_dir data/processed
 ```
 
