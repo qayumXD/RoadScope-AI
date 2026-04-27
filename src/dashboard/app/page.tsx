@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Papa from 'papaparse';
+import { useState, useEffect, useCallback } from 'react';
+import { parse, type ParseResult } from 'papaparse';
 import { UploadCloud, Map as MapIcon, Loader2, Database } from 'lucide-react';
 import PotholeMap from '../components/Map';
 import PotholeStats from '../components/Stats';
@@ -52,30 +52,13 @@ export default function Home() {
     filterSeverity === 'All' ? true : p.severity === filterSeverity
   );
 
-  // Auto-load default data if present in public folder
-  useEffect(() => {
-    const loadDefaultData = async () => {
-      try {
-        const response = await fetch('/potholes.csv');
-        if (response.ok) {
-          const text = await response.text();
-          setFileName('potholes.csv (Auto-loaded)');
-          parseCSV(text);
-        }
-      } catch (err) {
-        console.log('No default potholes.csv found in public folder.');
-      }
-    };
-    loadDefaultData();
-  }, []);
-
-  const parseCSV = (csvText: string) => {
+  const parseCSV = useCallback((csvText: string) => {
     setIsLoading(true);
-    Papa.parse(csvText, {
+    parse<CsvRow>(csvText, {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
-        const parsedData: Pothole[] = (results.data as CsvRow[])
+      complete: (results: ParseResult<CsvRow>) => {
+        const parsedData: Pothole[] = results.data
           .map((row, index) => {
             const latitude = Number(row.latitude);
             const longitude = Number(row.longitude);
@@ -96,12 +79,29 @@ export default function Home() {
         setPotholes(parsedData);
         setIsLoading(false);
       },
-      error: (error) => {
+      error: (error: Error) => {
         console.error('Error parsing CSV:', error);
         setIsLoading(false);
       }
     });
-  };
+  }, []);
+
+  // Auto-load default data if present in public folder
+  useEffect(() => {
+    const loadDefaultData = async () => {
+      try {
+        const response = await fetch('/potholes.csv');
+        if (response.ok) {
+          const text = await response.text();
+          setFileName('potholes.csv (Auto-loaded)');
+          parseCSV(text);
+        }
+      } catch {
+        console.log('No default potholes.csv found in public folder.');
+      }
+    };
+    loadDefaultData();
+  }, [parseCSV]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { APIProvider, Map, AdvancedMarker, Marker, Pin, InfoWindow } from '@vis.gl/react-google-maps';
 import { Pothole } from '../types';
 
@@ -16,13 +16,9 @@ export default function PotholeMap({ potholes, className }: MapComponentProps) {
 
     // Default center (can be dynamic based on potholes)
     const defaultCenter = { lat: 0, lng: 0 };
-    const [center, setCenter] = useState(defaultCenter);
-
-    useEffect(() => {
-        if (potholes.length > 0) {
-            setCenter({ lat: potholes[0].latitude, lng: potholes[0].longitude });
-        }
-    }, [potholes]);
+    const center = potholes.length > 0
+        ? { lat: potholes[0].latitude, lng: potholes[0].longitude }
+        : defaultCenter;
 
     if (!apiKey) {
         return (
