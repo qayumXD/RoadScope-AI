@@ -2,8 +2,9 @@ import requests
 import pandas as pd
 import argparse
 import time
+import os
 
-def snap_to_road(input_csv, output_csv, api_key):
+def snap_to_road(input_csv, output_csv, api_key, sleep_sec=0.1, timeout_sec=20):
     """
     Snaps GPS coordinates to the nearest road using Google Roads API.
     
@@ -24,54 +25,67 @@ def snap_to_road(input_csv, output_csv, api_key):
 
     # Google Roads API limits: 100 points per request
     chunk_size = 100
-    snapped_points = []
+    working_df = df.copy().reset_index(drop=True)
+    snapped_latitudes = [None] * len(working_df)
+    snapped_longitudes = [None] * len(working_df)
     
     print(f"Snapping {len(df)} points to roads...")
 
-    for i in range(0, len(df), chunk_size):
-        chunk = df.iloc[i:i+chunk_size]
+    for i in range(0, len(working_df), chunk_size):
+        chunk = working_df.iloc[i:i+chunk_size]
         path = "|".join([f"{lat},{lon}" for lat, lon in zip(chunk['latitude'], chunk['longitude'])])
-        
-        url = f"https://roads.googleapis.com/v1/snapToRoads?path={path}&interpolate=true&key={api_key}"
-        
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-            if 'snappedPoints' in data:
-                for point in data['snappedPoints']:
-                    loc = point['location']
-                    snapped_points.append({
-                        'latitude': loc['latitude'],
-                        'longitude': loc['longitude'],
-                        'original_index': point.get('originalIndex') # Optional mapping back
-                    })
-            else:
-                print(f"Warning: No snapped points returned for chunk {i//chunk_size}")
-        else:
-            print(f"Error: API Request failed with status {response.status_code}: {response.text}")
-            break
-        
-        time.sleep(0.1) # Be nice to the API
 
-    # Create new DataFrame
-    # Note: 'interpolate=true' might return MORE points than input if gaps are large.
-    # If strictly mapping 1-to-1, logic needs to use 'originalIndex' to merge back.
-    # For now, we save the smooth path.
-    
-    snapped_df = pd.DataFrame(snapped_points)
-    
-    if not snapped_df.empty:
-        snapped_df.to_csv(output_csv, index=False)
-        print(f"Saved {len(snapped_df)} snapped points to {output_csv}")
-    else:
-        print("Failed to snap any points.")
+        try:
+            response = requests.get(
+                "https://roads.googleapis.com/v1/snapToRoads",
+                params={"path": path, "interpolate": "false", "key": api_key},
+                timeout=timeout_sec
+            )
+            response.raise_for_status()
+        except requests.RequestException as e:
+            print(f"Warning: API request failed for chunk {i // chunk_size}: {e}")
+            continue
+
+        data = response.json()
+        snapped_chunk_count = 0
+        for point in data.get('snappedPoints', []):
+            original_index = point.get('originalIndex')
+            if original_index is None:
+                continue
+            if not (0 <= original_index < len(chunk)):
+                continue
+
+            row_index = chunk.index[original_index]
+            loc = point['location']
+            snapped_latitudes[row_index] = loc['latitude']
+            snapped_longitudes[row_index] = loc['longitude']
+            snapped_chunk_count += 1
+
+        if snapped_chunk_count == 0:
+            print(f"Warning: No snapped points returned for chunk {i // chunk_size}")
+
+        time.sleep(sleep_sec)
+
+    output_df = working_df.copy()
+    output_df['snapped_latitude'] = snapped_latitudes
+    output_df['snapped_longitude'] = snapped_longitudes
+    output_df['snapped_applied'] = output_df['snapped_latitude'].notna() & output_df['snapped_longitude'].notna()
+
+    output_df.loc[output_df['snapped_applied'], 'latitude'] = output_df.loc[output_df['snapped_applied'], 'snapped_latitude']
+    output_df.loc[output_df['snapped_applied'], 'longitude'] = output_df.loc[output_df['snapped_applied'], 'snapped_longitude']
+
+    os.makedirs(os.path.dirname(output_csv) or '.', exist_ok=True)
+    output_df.to_csv(output_csv, index=False)
+    print(f"Saved {len(output_df)} rows to {output_csv} ({output_df['snapped_applied'].sum()} snapped)")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Snap GPS points to roads using Google API")
     parser.add_argument("--input", type=str, required=True, help="Input CSV with lat/lon")
     parser.add_argument("--output", type=str, default="data/snapped_potholes.csv", help="Output CSV")
     parser.add_argument("--key", type=str, required=True, help="Google Maps API Key")
+    parser.add_argument("--sleep", type=float, default=0.1, help="Delay between API requests in seconds")
+    parser.add_argument("--timeout", type=int, default=20, help="API request timeout in seconds")
     
     args = parser.parse_args()
     
-    snap_to_road(args.input, args.output, args.key)
+    snap_to_road(args.input, args.output, args.key, args.sleep, args.timeout)

@@ -11,9 +11,7 @@ numpy>=1.24.0             # Numerical operations
 # Geospatial Processing
 gpxpy>=1.6.0              # Parsing GPX files
 geopy>=2.4.0              # Geocoding and distance calculations
+requests>=2.31.0          # HTTP requests for Google Roads API
+pytz>=2024.1              # Timezone compatibility utilities
 
-# Visualization & Dashboard
-streamlit>=1.30.0         # Web dashboard framework
-folium>=0.15.0            # Interactive maps
-streamlit-folium>=0.17.0  # Streamlit integration for Folium
-matplotlib>=3.8.0         # Plotting library
+# Note: The web dashboard runs in src/dashboard using Next.js dependencies.

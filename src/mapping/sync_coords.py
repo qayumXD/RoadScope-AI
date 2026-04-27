@@ -1,9 +1,7 @@
 import pandas as pd
 import argparse
-from datetime import timedelta, datetime
-import pytz
 
-def sync_timestamps(detections_csv, gpx_csv, video_start_time_str, output_csv):
+def sync_timestamps(detections_csv, gpx_csv, video_start_time_str, output_csv, max_gap_sec=60.0):
     """
     Synchronizes detection timestamps with GPS timestamps.
     
@@ -21,55 +19,55 @@ def sync_timestamps(detections_csv, gpx_csv, video_start_time_str, output_csv):
         print(f"Error: {e}")
         return
 
+    if 'timestamp_ms' not in detections.columns:
+        print("Error: detections CSV must include a 'timestamp_ms' column.")
+        return
+    required_gps_cols = {'time', 'latitude', 'longitude'}
+    if not required_gps_cols.issubset(gps_data.columns):
+        print("Error: GPS CSV must include 'time', 'latitude', and 'longitude' columns.")
+        return
+
     # Parse timestamps
-    # GPS time should already be UTC from parse_gpx.py, but let's ensure
-    gps_data['time'] = pd.to_datetime(gps_data['time'])
+    gps_data['time'] = pd.to_datetime(gps_data['time'], utc=True, errors='coerce')
+    gps_data = gps_data.dropna(subset=['time']).sort_values('time').reset_index(drop=True)
+    if gps_data.empty:
+        print("Error: GPS CSV has no valid timestamps after parsing.")
+        return
+
+    detections['timestamp_ms'] = pd.to_numeric(detections['timestamp_ms'], errors='coerce')
+    detections = detections.dropna(subset=['timestamp_ms']).copy()
+    if detections.empty:
+        print("Error: Detections CSV has no valid 'timestamp_ms' values.")
+        return
     
     # Video start time
     try:
-        video_start_time = pd.to_datetime(video_start_time_str).replace(tzinfo=pytz.UTC)
+        video_start_time = pd.to_datetime(video_start_time_str, utc=True)
     except ValueError:
         print("Error: Invalid video start time format. Use ISO 8601 (e.g., '2023-10-27T10:00:00')")
         return
 
-    print(f"Syncing video started at {video_start_time} UTC with {len(gps_data)} GPS points...")
+    print(f"Syncing video started at {video_start_time} with {len(gps_data)} GPS points...")
 
-    # Function to find nearest GPS point
-    def get_lat_lot(row):
-        # Calculate absolute time of this detection
-        # timestamp_ms is from the start of the video
-        detection_time = video_start_time + timedelta(milliseconds=row['timestamp_ms'])
-        
-        # Find nearest GPS point by time
-        # This is a naive nearest neighbor search. For production, use `pd.merge_asof`.
-        # Ensure GPS data is sorted
-        gps_data_sorted = gps_data.sort_values('time')
-        
-        # Use merge_asof logic manually or use index search
-        # Calculate time difference
-        time_diff = (gps_data_sorted['time'] - detection_time).abs()
-        
-        # Find index of minimum difference
-        min_idx = time_diff.idxmin()
-        nearest_point = gps_data_sorted.loc[min_idx]
-        
-        # Threshold: if difference is too large (e.g. > 60 seconds), GPS might be missing
-        if time_diff[min_idx].total_seconds() > 60.0:
-            return None, None
-            
-        return nearest_point['latitude'], nearest_point['longitude']
+    detections = detections.copy()
+    detections['detection_time'] = video_start_time + pd.to_timedelta(detections['timestamp_ms'], unit='ms')
+    detections = detections.sort_values('detection_time').reset_index(drop=True)
 
-    # Apply to all detections
-    # Note: iterating rows is slow for large datasets, vectorization is better but more complex to explain/implement quickly.
-    # For a prototype, this is fine.
-    
-    merged_data = detections.copy()
-    merged_data[['latitude', 'longitude']] = merged_data.apply(
-        lambda row: pd.Series(get_lat_lot(row)), axis=1
+    merged_data = pd.merge_asof(
+        detections,
+        gps_data[['time', 'latitude', 'longitude']],
+        left_on='detection_time',
+        right_on='time',
+        direction='nearest',
+        tolerance=pd.Timedelta(seconds=max_gap_sec)
     )
+
+    merged_data = merged_data.rename(columns={'time': 'gps_time'})
+    merged_data['detection_time'] = merged_data['detection_time'].dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+    merged_data['gps_time'] = merged_data['gps_time'].dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
     
     # Filter out points where GPS sync failed (NaNs)
-    synced_count = merged_data['latitude'].count()
+    synced_count = merged_data['latitude'].notna().sum()
     print(f"Successfully synced {synced_count} / {len(merged_data)} detections.")
     
     if synced_count > 0:
@@ -84,7 +82,8 @@ if __name__ == "__main__":
     parser.add_argument("--gpx_csv", type=str, required=True, help="Path to parsed GPS CSV")
     parser.add_argument("--start_time", type=str, required=True, help="Video start UTC time (ISO 8601, e.g. 2023-10-27T14:30:00)")
     parser.add_argument("--output", type=str, default="data/mapped_potholes.csv", help="Output path")
+    parser.add_argument("--max_gap", type=float, default=60.0, help="Maximum allowed time gap (seconds) when matching GPS points")
     
     args = parser.parse_args()
     
-    sync_timestamps(args.detections, args.gpx_csv, args.start_time, args.output)
+    sync_timestamps(args.detections, args.gpx_csv, args.start_time, args.output, args.max_gap)

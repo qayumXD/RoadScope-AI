@@ -2,15 +2,13 @@ import argparse
 import subprocess
 import os
 import sys
-from datetime import datetime
 
-def run_step(command, description):
-    print(f"
->>> Step: {description}")
+def run_step(command, description, cwd=None):
+    print(f"\n>>> Step: {description}")
     print(f"Running: {' '.join(command)}")
     try:
         # Run the command and wait for it to finish
-        result = subprocess.run(command, check=True, text=True)
+        result = subprocess.run(command, check=True, text=True, cwd=cwd)
         return result.returncode == 0
     except subprocess.CalledProcessError as e:
         print(f"Error during {description}: {e}")
@@ -34,29 +32,41 @@ def main():
 
     args = parser.parse_args()
 
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+    def resolve_path(path_value):
+        if os.path.isabs(path_value):
+            return path_value
+        return os.path.join(repo_root, path_value)
+
+    video_path = resolve_path(args.video)
+    gpx_path = resolve_path(args.gpx)
+    model_path = resolve_path(args.model)
+    output_dir = resolve_path(args.output_dir)
+
     # Create output directory
-    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
     
-    video_name = os.path.splitext(os.path.basename(args.video))[0]
-    detections_csv = os.path.join(args.output_dir, f"{video_name}_detections.csv")
-    gps_csv = os.path.join(args.output_dir, f"{video_name}_gps.csv")
-    final_csv = os.path.join(args.output_dir, f"{video_name}_mapped_potholes.csv")
+    video_name = os.path.splitext(os.path.basename(video_path))[0]
+    detections_csv = os.path.join(output_dir, f"{video_name}_detections.csv")
+    gps_csv = os.path.join(output_dir, f"{video_name}_gps.csv")
+    final_csv = os.path.join(output_dir, f"{video_name}_mapped_potholes.csv")
 
     # 1. Detection
     if not run_step([
         sys.executable, "src/detection/detect.py",
-        "--video", args.video,
-        "--model", args.model,
+        "--video", video_path,
+        "--model", model_path,
         "--output", detections_csv
-    ], "Detecting Potholes in Video"):
+    ], "Detecting Potholes in Video", cwd=repo_root):
         return
 
     # 2. Parse GPX
     if not run_step([
         sys.executable, "src/mapping/parse_gpx.py",
-        "--gpx", args.gpx,
+        "--gpx", gpx_path,
         "--output", gps_csv
-    ], "Parsing GPX Data"):
+    ], "Parsing GPX Data", cwd=repo_root):
         return
 
     # 3. Synchronize Coordinates
@@ -66,25 +76,26 @@ def main():
         "--gpx_csv", gps_csv,
         "--start_time", args.start_time,
         "--output", final_csv
-    ], "Syncing Detections with GPS"):
+    ], "Syncing Detections with GPS", cwd=repo_root):
         return
 
     # 4. Optional: Snap to Road
     if args.snap_key:
-        snapped_csv = os.path.join(args.output_dir, f"{video_name}_snapped.csv")
+        snapped_csv = os.path.join(output_dir, f"{video_name}_snapped.csv")
         if not run_step([
             sys.executable, "src/mapping/snap_to_road.py",
             "--input", final_csv,
             "--output", snapped_csv,
             "--key", args.snap_key
-        ], "Snapping Points to Road Network"):
+        ], "Snapping Points to Road Network", cwd=repo_root):
             return
         final_csv = snapped_csv
 
     # 5. Publish to Dashboard
     import shutil
-    dashboard_public = "src/dashboard/public/potholes.csv"
+    dashboard_public = os.path.join(repo_root, "src", "dashboard", "public", "potholes.csv")
     try:
+        os.makedirs(os.path.dirname(dashboard_public), exist_ok=True)
         shutil.copy2(final_csv, dashboard_public)
         print(f"\n📊 Published to Dashboard: {dashboard_public}")
     except Exception as e:

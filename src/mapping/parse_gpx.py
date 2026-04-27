@@ -1,7 +1,7 @@
 import gpxpy
 import pandas as pd
 import argparse
-from datetime import datetime
+import os
 
 def parse_gpx(gpx_file_path):
     """
@@ -14,7 +14,7 @@ def parse_gpx(gpx_file_path):
         pd.DataFrame: DataFrame containing 'time', 'latitude', 'longitude', 'elevation'.
     """
     try:
-        with open(gpx_file_path, 'r') as gpx_file:
+        with open(gpx_file_path, 'r', encoding='utf-8') as gpx_file:
             gpx = gpxpy.parse(gpx_file)
     except FileNotFoundError:
         print(f"Error: File {gpx_file_path} not found.")
@@ -32,10 +32,18 @@ def parse_gpx(gpx_file_path):
                 })
     
     df = pd.DataFrame(data)
+    if df.empty:
+        print(f"Warning: No track points found in {gpx_file_path}")
+        return df
     
-    # Ensure time is in UTC and timezone-aware
-    if not df.empty and df['time'].dt.tz is None:
-        df['time'] = df['time'].dt.tz_localize('UTC')
+    # Normalize timestamps and ensure they are UTC timezone-aware.
+    df['time'] = pd.to_datetime(df['time'], utc=True, errors='coerce')
+    invalid_time_count = df['time'].isna().sum()
+    if invalid_time_count > 0:
+        print(f"Warning: Dropping {invalid_time_count} GPX points with invalid timestamps.")
+        df = df.dropna(subset=['time']).copy()
+
+    df = df.sort_values('time').reset_index(drop=True)
         
     print(f"Parsed {len(df)} points from {gpx_file_path}")
     return df
@@ -46,6 +54,10 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str, default="data/gps_logs/parsed_gps.csv", help="Path to output CSV")
     
     args = parser.parse_args()
+
+    output_dir = os.path.dirname(args.output)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
     
     df = parse_gpx(args.gpx)
     if df is not None:
